@@ -2,118 +2,85 @@ from enum import Enum
 import pandas as pd
 
 
-class MatchResult(Enum):
-    DRAW = 0
-    HOME_WIN = 1
-    AWAY_WIN = 2
-
-
 class FootballResults:
-    TEAM = "Iceland"
-
     def __init__(self, file_name):
         self.csv_gen = (r for r in open(file_name, "r", encoding="utf8"))
-        # print(df[df["country"] == "Iceland"])
+        self.data = {}
 
-        self.pd_read = pd.read_csv(file_name)
+    class TeamMatchData:
+        def __init__(self, team_name, team_score, opponent_score):
+            self.team_name = team_name
+            self.team_score = int(team_score)
+            self.opponent_score = int(opponent_score)
+            self.match_won = True if team_score > opponent_score else False if team_score < opponent_score else None
 
-    @staticmethod
-    def row_to_python(row):
-        date = row[0], home_team = row[1], away_team = row[2], home_score = row[3], away_score = row[4]
-        match_result = \
-            MatchResult(1) if home_score > away_score else MatchResult(2) if home_score < away_score else MatchResult(0)
-        return date, match_result, home_team, home_score, away_team, away_score
+    class TeamIndicator:
+        def __init__(self, team_name):
+            self.team = team_name
+            self.wins = 0
+            self.losses = 0
+            self.draws = 0
+            self.goals_scored = 0
+            self.goals_took = 0
+            self.avg_goals_scored = 0
+            self.avg_goals_took = 0
 
-    def indicate(row):
-        # return reduce((lambda x, y: x + y), csv_gen)
-        pass
+        def __dict__(self):
+            return {
+                "team": self.team,
+                "wins": self.wins,
+                "losses": self.losses,
+                "draws": self.draws,
+                "goals_scored": self.goals_scored,
+                "goals_took": self.goals_took,
+                "avg_goals_scored": self.avg_goals_scored,
+                "avg_goals_took": self.avg_goals_took
+            }
 
-    def __iter__(self):
-        self.num = 1
-        return self
+        def indicate(self, match_data):
+            if match_data.match_won is True:
+                self.wins += 1
+            elif match_data.match_won is False:
+                self.losses += 1
+            else:
+                self.draws += 1
+            self.goals_scored += match_data.team_score
+            self.goals_took += match_data.opponent_score
 
-    def __next__(self):
-        num = self.num
-        self.num += 2
-        return num
+        def finalize(self):
+            matches = self.wins + self.losses + self.draws
+            self.avg_goals_scored = self.goals_scored / matches
+            self.avg_goals_took = self.goals_took / matches
 
+    @classmethod
+    def row_to_python(cls, row):
+        return cls.TeamMatchData(team_name=row[1], team_score=row[3], opponent_score=row[4]), \
+               cls.TeamMatchData(team_name=row[2], team_score=row[4], opponent_score=row[3])
 
-"""
-    for row in csv_gen:
-        row = row[:-1].split(',')
-        indicate(row)
+    def update_data(self, row):
+        home_team_dt, away_team_dt = self.row_to_python(row)
 
-"""
+        if not self.data.get(home_team_dt.team_name):
+            self.data[home_team_dt.team_name] = self.TeamIndicator(home_team_dt.team_name)
+        self.data.get(home_team_dt.team_name).indicate(home_team_dt)
 
-"""
-it = indicator(team)
-for row in csv_gen:
-    it(row[:-1].split(','))
+        if not self.data.get(away_team_dt.team_name):
+            self.data[away_team_dt.team_name] = self.TeamIndicator(away_team_dt.team_name)
+        self.data.get(away_team_dt.team_name).indicate(away_team_dt)
 
-
-def indicator(team):
-    wins = losses = draws = pos_score = neg_score = 0
-    for row in csv_gen:
-        it(row[:-1].split(','))
-
-
-
-def counter(maximum):
-    print("CCC")
-    i = 0
-    while i < maximum:
-        print("DDD")
-        val = (yield i)
-        print("AA: {}".format(val))
-        if val is not None:
-            i = val
-        else:
-            i += 1
-
-it = counter(10)
-
-print(it.send(None))
-print("BBB")
-print(it.send(6))
-print(next(it))
-print(it.__next__())
+    def indicate(self):
+        next(self.csv_gen)
+        for row in self.csv_gen:
+            self.update_data(row[:-1].split(','))
+        for k, v in self.data.items():
+            v.finalize()
+        return self.data
 
 
-class InfIter:
-    Infinite iterator to return all
-        odd numbers
-
-    def __iter__(self):
-        self.num = 1
-        return self
-
-    def __next__(self):
-        num = self.num
-        self.num += 2
-        return num
-
-a = iter(InfIter())
-print(next(a))
-print(next(a))
-
-def indicator(df, country: str):
-    wins = losses = draws = pos_score = neg_score = None
-    for row in df:
-        if row['country'] == country:
-            continue
-
-    return (wins, losses, draws, pos_score, neg_score)
-
-def country_list(country_cloumn):
-    return country_cloumn
-
-def country_filter(countries: list, country: str):
-    return countries[country] == countr
-"""
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    a = iter(FootballResults(file_name="results.csv"))
-    print(next(a))
-    print(next(a))
-    print(next(a))
+    # print(df[df["country"] == "Iceland"])
+    # self.pd_read = pd.read_csv(file_name)
+
+    TEAM = "Iceland"
+    a = FootballResults(file_name="results.csv").indicate()
+    print(a[TEAM].__dict__())
