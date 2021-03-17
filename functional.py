@@ -2,9 +2,6 @@ import operator
 from itertools import tee
 import matplotlib.pyplot as plt
 
-def add_to_avg(avg, avg_count, value):
-    return (avg * avg_count + value) / (avg_count + 1)
-
 
 def row_splitter(row):
     return row[:-1].split(',')
