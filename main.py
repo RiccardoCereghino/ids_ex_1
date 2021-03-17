@@ -149,7 +149,7 @@ if __name__ == '__main__':
     S = football_indicator[TEAM]
     print(S)
 
-    a = football_indicator.filter(mode='and', avg_goals_scored__gt=S.avg_goals_scored)
+    a = football_indicator.filter(mode='and', avg_goals_scored__gt=S.avg_goals_scored).filter(mode='or', draws__lt=S.draws)
     b = a.filter(mode='and', draws__lt=S.draws)
     del a
     c = football_indicator.filter(mode='and', avg_goals_scored__gt=S.avg_goals_scored, wins__gt=S.wins)
