@@ -56,20 +56,19 @@ def update_indicator(ind, md):
 def generate_indicators(file_name):
     rows = generate_rows(file_name)
 
-    indicators = {}
-
+    inds = {}
     for match_data in iter(generate_match_data(rows)):
-        if indicators.get(match_data["team_name"]) is None:
-            indicators[match_data["team_name"]] = {
+        if inds.get(match_data["team_name"]) is None:
+            inds[match_data["team_name"]] = {
                 "wins": 0,
                 "losses": 0,
                 "draws": 0,
                 "avg_goals_scored": 0,
                 "avg_goals_taken": 0
             }
-        indicators[match_data["team_name"]] = update_indicator(indicators[match_data["team_name"]], match_data)
+        inds[match_data["team_name"]] = update_indicator(inds[match_data["team_name"]], match_data)
 
-    return indicators
+    return inds
 
 
 # {'wins': 0, 'losses': 2, 'draws': 1, 'avg_goals_scored': 0.6666666666666666, 'avg_goals_taken': 1.6666666666666667}
@@ -124,6 +123,5 @@ if __name__ == '__main__':
         "avg_goals_scored__gt": S.get("avg_goals_scored")
     }
 
-    for t, ind in indicator(indicators, **search_params).items():
-        prettify(t, ind)
-
+    for t, indic in indicator(indicators, **search_params).items():
+        prettify(t, indic)
