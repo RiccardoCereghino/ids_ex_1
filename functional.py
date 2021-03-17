@@ -1,6 +1,6 @@
 import operator
 from itertools import tee
-
+import matplotlib.pyplot as plt
 
 def add_to_avg(avg, avg_count, value):
     return (avg * avg_count + value) / (avg_count + 1)
@@ -40,9 +40,8 @@ def generate_match_data(row):
 
 
 def update_indicator(ind, md):
-    matches = ind["wins"] + ind["losses"] + ind["draws"]
-    ind["avg_goals_scored"] = add_to_avg(ind["avg_goals_scored"], matches, md["home_goals"])
-    ind["avg_goals_taken"] = add_to_avg(ind["avg_goals_taken"], matches, md["away_goals"])
+    ind["goals_scored_list"].append(md["home_goals"])
+    ind["goals_taken_list"].append(md["away_goals"])
 
     if md["home_goals"] > md["away_goals"]:
         ind["wins"] += 1
@@ -70,12 +69,17 @@ def generate_indicators(file_name):
                 "draws": 0,
                 "avg_goals_scored": 0,
                 "avg_goals_taken": 0,
-                "win_streaks": [0]
+                "win_streaks": [0],
+                "goals_scored_list": [],
+                "goals_taken_list": []
             }
         inds[match_data["team_name"]] = update_indicator(inds[match_data["team_name"]], match_data)
 
     for el in inds.values():
         el["max_win_streak"] = max(el.pop("win_streaks"))
+        matches = el["wins"] + el["losses"] + el["draws"]
+        el["avg_goals_scored"] = sum(el["goals_scored_list"]) / matches
+        el["avg_goals_taken"] = sum(el["goals_taken_list"]) / matches
         yield el
 
 
@@ -139,13 +143,22 @@ def prettyficator(it):
         prettify(el)
 
 
+def plot(ind: dict):
+    plt.plot(ind["goals_scored_list"], label='Goals Scored')
+    plt.title(ind["team_name"])
+    plt.plot(ind["goals_taken_list"], label='Goals Taken')
+    plt.legend()
+    plt.show()
+
+
 if __name__ == '__main__':
     indicators = generate_indicators("results.csv")
-    ind_1, ind_2 = tee(indicators, 2)
+    ind_1, ind_2, ind_3 = tee(indicators, 3)
 
     print("Iceland indicators")
     S = list(select(ind_1, team_name__eq="Iceland")).pop()
     prettify(S)
+    plot(S)
 
     search_params = {
         "mode": "and",
@@ -158,3 +171,8 @@ if __name__ == '__main__':
 
     print("Teams with indicators better than Iceland")
     prettyficator(select(ind=ind_2, **search_params))
+
+    print("Italy indicators")
+    S = list(select(ind_3, team_name__eq="Italy")).pop()
+    prettify(S)
+    plot(S)
