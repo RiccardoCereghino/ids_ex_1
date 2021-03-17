@@ -38,19 +38,38 @@ def generate_match_data(row):
             }
 
 
-def update_indicator(indicator, md):
-    matches = indicator["wins"] + indicator["losses"] + indicator["draws"]
-    indicator["avg_goals_scored"] = add_to_avg(indicator["avg_goals_scored"], matches, md["home_goals"])
-    indicator["avg_goals_taken"] = add_to_avg(indicator["avg_goals_taken"], matches, md["away_goals"])
+def update_indicator(ind, md):
+    matches = ind["wins"] + ind["losses"] + ind["draws"]
+    ind["avg_goals_scored"] = add_to_avg(ind["avg_goals_scored"], matches, md["home_goals"])
+    ind["avg_goals_taken"] = add_to_avg(ind["avg_goals_taken"], matches, md["away_goals"])
 
     if md["home_goals"] > md["away_goals"]:
-        indicator["wins"] += 1
+        ind["wins"] += 1
     elif md["home_goals"] < md["away_goals"]:
-        indicator["losses"] += 1
+        ind["losses"] += 1
     else:
-        indicator["draws"] += 1
+        ind["draws"] += 1
 
-    return indicator
+    return ind
+
+
+def generate_indicators(file_name):
+    rows = generate_rows(file_name)
+
+    indicators = {}
+
+    for match_data in iter(generate_match_data(rows)):
+        if indicators.get(match_data["team_name"]) is None:
+            indicators[match_data["team_name"]] = {
+                "wins": 0,
+                "losses": 0,
+                "draws": 0,
+                "avg_goals_scored": 0,
+                "avg_goals_taken": 0
+            }
+        indicators[match_data["team_name"]] = update_indicator(indicators[match_data["team_name"]], match_data)
+
+    return indicators
 
 
 # {'wins': 0, 'losses': 2, 'draws': 1, 'avg_goals_scored': 0.6666666666666666, 'avg_goals_taken': 1.6666666666666667}
@@ -80,32 +99,31 @@ def indicate(ind, **kwargs):
     return result
 
 
-def indicator(**kwargs):
+def indicator(ind, **kwargs):
     r = {}
-    for k, v in indicators.items():
+    for k, v in ind.items():
         if indicate(v, **kwargs):
             r[k] = v
     return r
 
 
+def prettify(team_name, ind):
+    print("{}, wins: {}, losses: {}, draws: {}, scored goals avg: {}, taken goals avg: {}".format(
+        team_name, ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"], ind["avg_goals_taken"]))
+
+
 if __name__ == '__main__':
-    rows = generate_rows("results.csv")
-    indicators = {}
+    indicators = generate_indicators("results.csv")
 
-    for match_data in iter(generate_match_data(rows)):
-        if indicators.get(match_data["team_name"]) is None:
-            indicators[match_data["team_name"]] = {
-                "wins": 0,
-                "losses": 0,
-                "draws": 0,
-                "avg_goals_scored": 0,
-                "avg_goals_taken": 0
-            }
-        indicators[match_data["team_name"]] = update_indicator(indicators[match_data["team_name"]], match_data)
+    S = indicators["Iceland"]
+    prettify("Iceland", S)
 
-    print(indicators["Iceland"])
+    search_params = {
+        "mode": "and",
+        "wins__gt": S.get("wins"),
+        "avg_goals_scored__gt": S.get("avg_goals_scored")
+    }
 
-    res = indicator(mode='and', avg_goals_scored__gt=1, wins__gt=27)
-    print(res)
-
+    for t, ind in indicator(indicators, **search_params).items():
+        prettify(t, ind)
 
