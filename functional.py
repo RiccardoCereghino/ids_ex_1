@@ -1,3 +1,4 @@
+import itertools
 import operator
 
 
@@ -60,6 +61,7 @@ def generate_indicators(file_name):
     for match_data in iter(generate_match_data(rows)):
         if inds.get(match_data["team_name"]) is None:
             inds[match_data["team_name"]] = {
+                "team_name": match_data["team_name"],
                 "wins": 0,
                 "losses": 0,
                 "draws": 0,
@@ -68,7 +70,7 @@ def generate_indicators(file_name):
             }
         inds[match_data["team_name"]] = update_indicator(inds[match_data["team_name"]], match_data)
 
-    return inds
+    return [el for el in inds.values()]
 
 
 # {'wins': 0, 'losses': 2, 'draws': 1, 'avg_goals_scored': 0.6666666666666666, 'avg_goals_taken': 1.6666666666666667}
@@ -99,23 +101,26 @@ def indicate(ind, **kwargs):
 
 
 def indicator(ind, **kwargs):
-    r = {}
-    for k, v in ind.items():
-        if indicate(v, **kwargs):
-            r[k] = v
-    return r
+    for el in ind:
+        if indicate(el, **kwargs):
+            yield el
 
 
-def prettify(team_name, ind):
+def prettify(ind):
     print("{}, wins: {}, losses: {}, draws: {}, scored goals avg: {}, taken goals avg: {}".format(
-        team_name, ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"], ind["avg_goals_taken"]))
+        ind["team_name"], ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"], ind["avg_goals_taken"]))
+
+
+def prettyficator(it):
+    for el in iter(it):
+        prettify(el)
 
 
 if __name__ == '__main__':
     indicators = generate_indicators("results.csv")
 
-    S = indicators["Iceland"]
-    prettify("Iceland", S)
+    S = list(indicator(indicators, team_name__eq="Iceland")).pop()
+    prettify(S)
 
     search_params = {
         "mode": "and",
@@ -123,5 +128,11 @@ if __name__ == '__main__':
         "avg_goals_scored__gt": S.get("avg_goals_scored")
     }
 
-    for t, indic in indicator(indicators, **search_params).items():
-        prettify(t, indic)
+    more_search_params = {
+        "mode": "or",
+        "losses__gt": S.get("wins")
+    }
+
+    prettyficator(indicator(indicator(ind=indicators, **search_params), **more_search_params))
+
+
