@@ -1,5 +1,13 @@
-import itertools
 import operator
+from itertools import tee
+
+
+def add_to_avg(avg, avg_count, value):
+    return (avg * avg_count + value) / (avg_count + 1)
+
+
+def row_splitter(row):
+    return row[:-1].split(',')
 
 
 def csv_reader(file_name):
@@ -7,21 +15,13 @@ def csv_reader(file_name):
         yield line
 
 
-def row_splitter(row):
-    return row[:-1].split(',')
-
-
 def generate_rows(file_name):
     csv_gen = csv_reader(file_name)
 
     columns = row_splitter(next(csv_gen))
 
-    for row in iter(csv_gen):
+    for row in csv_gen:
         yield dict(zip(columns, row_splitter(row)))
-
-
-def add_to_avg(avg, avg_count, value):
-    return (avg * avg_count + value) / (avg_count + 1)
 
 
 def generate_match_data(row):
@@ -46,11 +46,14 @@ def update_indicator(ind, md):
 
     if md["home_goals"] > md["away_goals"]:
         ind["wins"] += 1
-    elif md["home_goals"] < md["away_goals"]:
-        ind["losses"] += 1
+        ind["win_streaks"][-1] += 1
     else:
-        ind["draws"] += 1
-
+        if md["home_goals"] < md["away_goals"]:
+            ind["losses"] += 1
+        else:
+            ind["draws"] += 1
+        if ind["win_streaks"][-1] != 0:
+            ind["win_streaks"].append(0)
     return ind
 
 
@@ -66,20 +69,32 @@ def generate_indicators(file_name):
                 "losses": 0,
                 "draws": 0,
                 "avg_goals_scored": 0,
-                "avg_goals_taken": 0
+                "avg_goals_taken": 0,
+                "win_streaks": [0]
             }
         inds[match_data["team_name"]] = update_indicator(inds[match_data["team_name"]], match_data)
 
-    return [el for el in inds.values()]
+    for el in inds.values():
+        el["max_win_streak"] = max(el.pop("win_streaks"))
+        yield el
 
 
-# {'wins': 0, 'losses': 2, 'draws': 1, 'avg_goals_scored': 0.6666666666666666, 'avg_goals_taken': 1.6666666666666667}
-#  indicate(v, mode='or', avg_goals_scored__gt=1, wins__gt=10)
-def indicate(ind, **kwargs):
-    mode = kwargs.pop('mode', 'or')
+def selector(ind, mode, operators):
 
     result = False if mode == 'or' else True
 
+    for operation in operators:
+        _result = operation(ind)
+
+        if mode == 'or':
+            result = _result or result
+        else:
+            result = _result and result
+    return result
+
+
+def operators_reader(**kwargs):
+    operators = []
     for kw in kwargs:
         if '__' in kw:
             _kw, op = kw.split('__')
@@ -91,24 +106,32 @@ def indicate(ind, **kwargs):
 
         _operator = getattr(operator, op)
 
-        _result = _operator(ind.get(_kw), kwargs[kw])
+        operators.append(lambda x: _operator(x.get(_kw), kwargs[kw]))
 
-        if mode == 'or':
-            result = _result or result
-        else:
-            result = _result and result
-    return result
+    return operators
 
 
-def indicator(ind, **kwargs):
-    for el in ind:
-        if indicate(el, **kwargs):
-            yield el
+def select(ind, **kwargs):
+    """
+    It is possible to concatenate select as it returns generators
+    select(select(ind=ind_2, **search_params), **more_search_params)
+
+    :param ind: generator
+    :param kwargs
+    :return: generator
+    """
+    mode = kwargs.pop('mode', 'or')
+    operators = operators_reader(**kwargs)
+    return filter(lambda el: selector(el, mode, operators), ind)
 
 
 def prettify(ind):
-    print("{}, wins: {}, losses: {}, draws: {}, scored goals avg: {}, taken goals avg: {}".format(
-        ind["team_name"], ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"], ind["avg_goals_taken"]))
+    print(
+        "{}, wins: {}, losses: {}, draws: {}, scored goals avg: {}, taken goals avg: {}, max_win_streak: {}".format(
+            ind["team_name"], ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"],
+            ind["avg_goals_taken"], ind["max_win_streak"]
+        )
+    )
 
 
 def prettyficator(it):
@@ -118,21 +141,20 @@ def prettyficator(it):
 
 if __name__ == '__main__':
     indicators = generate_indicators("results.csv")
+    ind_1, ind_2 = tee(indicators, 2)
 
-    S = list(indicator(indicators, team_name__eq="Iceland")).pop()
+    print("Iceland indicators")
+    S = list(select(ind_1, team_name__eq="Iceland")).pop()
     prettify(S)
 
     search_params = {
         "mode": "and",
         "wins__gt": S.get("wins"),
-        "avg_goals_scored__gt": S.get("avg_goals_scored")
+        "losses__lt": S.get("losses"),
+        "avg_goals_scored__gt": S.get("avg_goals_scored"),
+        "avg_goals_taken__lt": S.get("avg_goals_taken"),
+        "max_win_streak__gt": S.get("max_win_streak")
     }
 
-    more_search_params = {
-        "mode": "or",
-        "losses__gt": S.get("wins")
-    }
-
-    prettyficator(indicator(indicator(ind=indicators, **search_params), **more_search_params))
-
-
+    print("Teams with indicators better than Iceland")
+    prettyficator(select(ind=ind_2, **search_params))
