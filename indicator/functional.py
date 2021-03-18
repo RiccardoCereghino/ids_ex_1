@@ -1,7 +1,7 @@
 import operator
+import os
 from itertools import tee
 import matplotlib.pyplot as plt
-
 
 def row_splitter(row):
     return row[:-1].split(',')
@@ -113,14 +113,6 @@ def operators_reader(**kwargs):
 
 
 def select(ind, **kwargs):
-    """
-    It is possible to concatenate select as it returns generators
-    select(select(ind=ind_2, **search_params), **more_search_params)
-
-    :param ind: generator
-    :param kwargs
-    :return: generator
-    """
     mode = kwargs.pop('mode', 'or')
     operators = operators_reader(**kwargs)
     return filter(lambda el: selector(el, mode, operators), ind)
@@ -136,7 +128,7 @@ def prettify(ind):
 
 
 def prettyficator(it):
-    for el in iter(it):
+    for el in it:
         prettify(el)
 
 
@@ -149,7 +141,7 @@ def plot(ind: dict):
 
 
 if __name__ == '__main__':
-    indicators = generate_indicators("results.csv")
+    indicators = generate_indicators(os.path.abspath('indicator/results.csv'))
     ind_1, ind_2, ind_3 = tee(indicators, 3)
 
     print("Iceland indicators")
