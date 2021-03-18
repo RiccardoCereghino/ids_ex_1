@@ -1,19 +1,40 @@
+"""
+    This module generates plots on statistic extracted from the csv file which can be found at:
+    https://www.kaggle.com/martj42/international-football-results-from-1872-to-2017
+"""
+
+__license__ = "Riccardo-C"
+__docformat__ = 'reStructuredText'
+
 import operator
 import os
 from itertools import tee
+from typing import Iterator, List, Dict, Union, Callable, Any
+
 import matplotlib.pyplot as plt
 
-def row_splitter(row):
+
+def row_splitter(row: str) -> List[str]:
+    """Given a string returns a csv row, splits the cells into elements of a list
+
+    - input is in the form::
+          row = "a,b,c\\n"
+    """
     return row[:-1].split(',')
 
 
-def csv_reader(file_name):
+def csv_reader(file_name: str) -> Iterator[str]:
+    """Generates an iterator per line from a file encoded in utf8, specified with file_name"""
     for line in open(file_name, "r", encoding="utf8"):
         yield line
 
 
-def generate_rows(file_name):
-    csv_gen = csv_reader(file_name)
+def generate_rows(file: str) -> Iterator[Dict[str, str]]:
+    """
+    Iterates through a csv file (path), picks the first line to be used
+    as keys for the yielded list of returning dict
+    """
+    csv_gen = csv_reader(file)
 
     columns = row_splitter(next(csv_gen))
 
@@ -21,7 +42,8 @@ def generate_rows(file_name):
         yield dict(zip(columns, row_splitter(row)))
 
 
-def generate_match_data(row):
+def generate_match_data(row: Iterator[Dict[str, str]]) -> Iterator[Dict[str, Union[str, int]]]:
+    """Given an iterator from :func:`generate_rows` yield relevant data per team"""
     for r in iter(row):
         if r["tournament"] == "FIFA World Cup":
             yield {
@@ -36,7 +58,12 @@ def generate_match_data(row):
             }
 
 
-def update_indicator(ind, md):
+def update_indicator(
+        ind: Dict[str, Union[str, int, List['int']]],
+        md: Dict[str, Union[str, int, List['int']]]
+) -> Dict[str, Union[str, int, List['int']]]:
+    """Updates team indicator (ind) with yielded match data (md)"""
+
     ind["goals_scored_list"].append(md["home_goals"])
     ind["goals_taken_list"].append(md["away_goals"])
 
@@ -53,11 +80,17 @@ def update_indicator(ind, md):
     return ind
 
 
-def generate_indicators(file_name):
-    rows = generate_rows(file_name)
+def generate_indicators(file: str) -> Iterator[Dict[str, Union[str, int, float, List['int']]]]:
+    """
+    Iterates :func:`generate_rows` which iterates :func:`generate_rows`
+    to :func:`update_indicator`s of teams in the csv file
+
+    After all the iterations, yields the result
+    """
+    rows = generate_rows(file)
 
     inds = {}
-    for match_data in iter(generate_match_data(rows)):
+    for match_data in generate_match_data(rows):
         if inds.get(match_data["team_name"]) is None:
             inds[match_data["team_name"]] = {
                 "team_name": match_data["team_name"],
@@ -80,7 +113,10 @@ def generate_indicators(file_name):
         yield el
 
 
-def selector(ind, mode, operators):
+def selector(ind: Dict[str, Union[str, int, float, List['int']]], mode: str, operators: List[Callable]):
+    """
+
+    """
 
     result = False if mode == 'or' else True
 

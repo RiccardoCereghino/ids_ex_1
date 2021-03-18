@@ -1,13 +1,19 @@
-.. IDS xercise 1 documentation master file, created by
-   sphinx-quickstart on Thu Mar 18 18:46:18 2021.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Welcome to IDS xercise 1's documentation!
+IDS exercise 1 documentation
 =========================================
 .. automodule:: indicator.functional
     :members:
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+.. raw:: latex
+
+    \newpage
+
+.. code-block:: python
+
+    def csv_reader(file_name: str) -> Iterator[str]:
+        for line in open(file_name, "r", encoding="utf8"):
+            yield line
+
+.. code-block:: python
+
+    def row_splitter(row: str) -> List[str]:
+        return row[:-1].split(',')
