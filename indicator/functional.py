@@ -8,6 +8,7 @@ __docformat__ = 'reStructuredText'
 
 import operator
 import os
+from datetime import date
 from itertools import tee
 from typing import Iterator, List, Dict, Union, Callable, Any
 
@@ -42,27 +43,29 @@ def generate_rows(file: str) -> Iterator[Dict[str, str]]:
         yield dict(zip(columns, row_splitter(row)))
 
 
-def generate_match_data(row: Iterator[Dict[str, str]]) -> Iterator[Dict[str, Union[str, int]]]:
+def generate_match_data(row: Iterator[Dict[str, str]]) -> Iterator[Dict[str, Union[str, int, List[date]]]]:
     """Given an iterator from :func:`generate_rows` yield relevant data per team"""
     for r in iter(row):
         if r["tournament"] == "FIFA World Cup":
             yield {
                 "team_name": r["home_team"],
                 "home_goals": int(r["home_score"]),
-                "away_goals": int(r["away_score"])
+                "away_goals": int(r["away_score"]),
+                "date": date.fromisoformat(r["date"])
             }
             yield {
                 "team_name": r["away_team"],
                 "home_goals": int(r["away_score"]),
-                "away_goals": int(r["home_score"])
+                "away_goals": int(r["home_score"]),
+                "date": date.fromisoformat(r["date"])
             }
 
 
-def update_indicator(
-        ind: Dict[str, Union[str, int, List['int']]],
-        md: Dict[str, Union[str, int, List['int']]]
-) -> Dict[str, Union[str, int, List['int']]]:
+def update_indicator(ind: Dict[str, Union[str, int, List['int']]],
+                     md: Dict[str, Union[str, int, List['int']]]) -> Dict[str, Union[str, int, List[int], List[date]]]:
     """Updates team indicator (ind) with yielded match data (md)"""
+
+    ind["date"].append(md["date"])
 
     ind["goals_scored_list"].append(md["home_goals"])
     ind["goals_taken_list"].append(md["away_goals"])
@@ -80,10 +83,10 @@ def update_indicator(
     return ind
 
 
-def generate_indicators(file: str) -> Iterator[Dict[str, Union[str, int, float, List['int']]]]:
+def generate_indicators(file: str) -> Iterator[Dict[str, Union[str, int, float, List['int'], List[date]]]]:
     """
     Iterates :func:`generate_rows` which iterates :func:`generate_rows`
-    to :func:`update_indicator`s of teams in the csv file
+    to :func:`update_indicator` s of teams in the csv file
 
     After all the iterations, yields the result
     """
@@ -94,6 +97,7 @@ def generate_indicators(file: str) -> Iterator[Dict[str, Union[str, int, float, 
         if inds.get(match_data["team_name"]) is None:
             inds[match_data["team_name"]] = {
                 "team_name": match_data["team_name"],
+                "date": [],
                 "wins": 0,
                 "losses": 0,
                 "draws": 0,
@@ -113,11 +117,12 @@ def generate_indicators(file: str) -> Iterator[Dict[str, Union[str, int, float, 
         yield el
 
 
-def selector(ind: Dict[str, Union[str, int, float, List['int']]], mode: str, operators: List[Callable]):
+def selector(ind: Dict[str, Union[str, int, float, List[int], List[date]]],
+             mode: str, operators: List[Callable]) -> bool:
     """
-
+    Given a List of comparisons (operators, ex: x < 3) returns a boolean expressing a simple logic port for all
+    operators, it is used in :func:`select`
     """
-
     result = False if mode == 'or' else True
 
     for operation in operators:
@@ -130,7 +135,21 @@ def selector(ind: Dict[str, Union[str, int, float, List['int']]], mode: str, ope
     return result
 
 
-def operators_reader(**kwargs):
+def operators_reader(**kwargs: Union[str, int, float, List[int], List[date]]) -> List[Callable]:
+    """
+    Given any number of kwargs in the form:
+    - input is in the form::
+
+        team_name__eq="Italy"
+        avg_goals_scored__gte=1
+
+    It returns a list of functions from the operator library, based on the *__eq* section of the kwargs keyword.
+
+    The arguments of the operator function will be, on the left, the value of the key of the yielded dict and on the
+    right the value od the key of the corresponding kwargs value.
+
+    It is used in :func:`select`.
+    """
     operators = []
     for kw in kwargs:
         if '__' in kw:
@@ -143,18 +162,40 @@ def operators_reader(**kwargs):
 
         _operator = getattr(operator, op)
 
-        operators.append(lambda x: _operator(x.get(_kw), kwargs[kw]))
+        operators.append(lambda x: generate_operators(x, _operator, _kw, kwargs[kw]))
 
     return operators
 
 
-def select(ind, **kwargs):
+def generate_operators(x: Union[dict, List[dict]], op: Callable, k: str, v: Any) -> Iterator[Callable]:
+    """Auxiliary function of :func:`operators_reader`, to return multiple operators if x is list"""
+    if isinstance(x, list):
+        for el in x:
+            return op(el.get(k), v)
+    else:
+        return op(x.get(k), v)
+
+
+def select(
+        it: Iterator[Dict[str, Union[str, int, float, List[int], List[date]]]],
+        **kwargs: Union[str, int, float, List[int], List[date]]
+) -> Iterator[dict[str, Union[str, int, float, List[int], List[date]]]]:
+    """
+    Given a dict iterator (it) and any number of kwargs,
+    - in the form::
+
+        team_name__eq="Italy"
+        avg_goals_scored__gte=1
+
+    Returns a :func:`filter` iterator, filtering based on the condition specified in kwargs`.
+    """
     mode = kwargs.pop('mode', 'or')
     operators = operators_reader(**kwargs)
-    return filter(lambda el: selector(el, mode, operators), ind)
+    return filter(lambda el: selector(el, mode, operators), it)
 
 
-def prettify(ind):
+def prettify(ind: dict[str, Union[str, int, float, list[int], List[date]]]):
+    """Prints a match indicator human readable"""
     print(
         "{}, wins: {}, losses: {}, draws: {}, scored goals avg: {}, taken goals avg: {}, max_win_streak: {}".format(
             ind["team_name"], ind["wins"], ind["losses"], ind["draws"], ind["avg_goals_scored"],
@@ -163,16 +204,24 @@ def prettify(ind):
     )
 
 
-def prettyficator(it):
+def prettyficator(it: Iterator[dict[str, Union[str, int, float, List[int], List[date]]]]):
+    """Prints match indicators human readable"""
     for el in it:
         prettify(el)
 
 
 def plot(ind: dict):
-    plt.plot(ind["goals_scored_list"], label='Goals Scored')
+    """Plots the data of a match"""
+    plt.xlabel("Goals")
+    plt.ylabel("Date")
+
+    str_dates = [d.isoformat() for d in ind["date"]]
+
+    plt.plot(ind["goals_scored_list"], str_dates, label='Goals Scored')
     plt.title(ind["team_name"])
-    plt.plot(ind["goals_taken_list"], label='Goals Taken')
+    plt.plot(ind["goals_taken_list"], str_dates, label='Goals Taken')
     plt.legend()
+
     plt.show()
 
 
@@ -191,11 +240,12 @@ if __name__ == '__main__':
         "losses__lt": S.get("losses"),
         "avg_goals_scored__gt": S.get("avg_goals_scored"),
         "avg_goals_taken__lt": S.get("avg_goals_taken"),
-        "max_win_streak__gt": S.get("max_win_streak")
+        "max_win_streak__gt": S.get("max_win_streak"),
+        "date_lte": date.today()
     }
 
     print("Teams with indicators better than Iceland")
-    prettyficator(select(ind=ind_2, **search_params))
+    prettyficator(select(ind_2, **search_params))
 
     print("Italy indicators")
     S = list(select(ind_3, team_name__eq="Italy")).pop()
